@@ -1,12 +1,12 @@
 # Measuring affix rivalry as a gradient relationship
 
-This repository contains supplementary material for *Measuring affix rivalry as a gradient relationship*:
+This repository contains supplementary material for *Measuring affix rivalry as a gradient relationship* (Justine Salvadori, Rossella Varvara and Richard Huyghe):
 
 | File  | Description | Comment |
 | :--- | :--- | :--- | 
-| script_rivalry.Rmd | Script for statistical analysis and data visualization (R Markdown)| - |
-| data_complete.xlsx | Complete dataset | For Section 4 "Case study: Deverbal nominalizing suffixes in French" <br />  |
 | annotation_guide_1.2.pdf | Annotation guide that was used for the semantic analysis of deverbal nouns | Other versions are available at https://github.com/semantics-deverbal-nouns/annotation-guide |
+| data_complete.xlsx | Complete dataset | For Section 4 "Case study: Deverbal nominalizing suffixes in French" <br />  |
+| script_rivalry.Rmd | Script for statistical analysis and data visualization (R Markdown)| - |
 
 data.xlsx contains the following columns:
 
