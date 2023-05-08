@@ -1,0 +1,457 @@
+---
+title: "Measuring affix rivalry as a gradient relationship"
+author: "Justine Salvadori, Rossella Varvara & Richard Huyghe"
+output:
+  html_document:
+    number_sections: false
+    df_print: paged
+---
+
+
+```{r Working directory}
+setwd("XXX")
+```
+
+```{r Packages, message=FALSE, warning=FALSE}
+library(readxl)
+library(tidyverse)
+library(fuzzySim)
+library(RColorBrewer)
+library(pheatmap)
+library(MeanRarity)
+library(reshape2)
+library(ggbump)
+library(cultevo)
+```
+
+```{r Datasets}
+## Original data set
+data_complete <- read_excel("data_complete.xlsx", sheet = 1)
+
+## Adapted data set (without functions realized only once per suffix)
+data <- data_complete %>% 
+        group_by(SUFFIX, COMBINED_TYPE) %>% 
+        filter(n() > 1) %>% 
+        ungroup()
+```
+
+# Analyses 
+
+## Hill-Shannon index
+
+```{r Hill-Shannon index}
+## Preparation of the df
+abund <- splist2presabs(data, 
+                        sites.col = "SUFFIX", 
+                        sp.col = "COMBINED_TYPE", 
+                        keep.n = TRUE)
+abund <- abund %>%
+         remove_rownames %>% 
+         column_to_rownames(var = "SUFFIX")
+
+## -ade
+ade_abund <- as.numeric(as.vector(abund[1,]))
+MeanRarity::rarity(ade_abund, 0)
+
+## -aire
+aire_abund <- as.numeric(as.vector(abund[2,]))
+MeanRarity::rarity(aire_abund, 0)
+
+## -ant
+ant_abund <- as.numeric(as.vector(abund[3,]))
+MeanRarity::rarity(ant_abund, 0)
+
+## -eur
+eur_abund <- as.numeric(as.vector(abund[4,]))
+MeanRarity::rarity(eur_abund, 0)
+
+## -ment
+ment_abund <- as.numeric(as.vector(abund[5,]))
+MeanRarity::rarity(ment_abund, 0)
+
+## -ure
+ure_abund <- as.numeric(as.vector(abund[6,]))
+MeanRarity::rarity(ure_abund, 0)
+```
+
+
+## Similarity/complementary measures
+
+### Function to compute scores
+
+The function is adapted from the "beta.div.comp" function ("adespatial" package).
+
+Author of the "beta.div.comp" function: Pierre Legendre.
+
+Full reference: "adespatial" package: Dray S, Bauman D, Blanchet G, Borcard D, Clappe S, Guénard G, Jombart T, Larocque G, Legendre P, Madi N, Wagner HH (2023). adespatial: Multivariate Multiscale Spatial Analysis. R package version 0.3-21, https://CRAN.R-project.org/package=adespatial.
+
+```{r Function}
+SIM_FUN <- function(mat, quant = FALSE)
+{
+  #
+  mat <- as.matrix(mat)
+  n <- nrow(mat)
+  if (is.null(rownames(mat)))
+    noms <- paste("Suffix", 1:n, sep = "")
+  else
+    noms <- rownames(mat)
+  #
+  if (!quant) { 
+      mat.b <- ifelse(mat > 0, 1, 0) 
+      a <- mat.b %*% t(mat.b) 
+      b <- mat.b %*% (1 - t(mat.b))
+      c <- (1 - mat.b) %*% t(mat.b)
+      min.bc <- pmin(b, c)
+      max.bc <- pmax(b, c)
+      #
+      SIM <- 1 - ((b + c) / (2 * a + b + c))
+      BD <- min.bc / max.bc
+      #            
+      rownames(SIM) <- rownames(BD) <- noms
+      SIM <- as.dist(SIM)
+      BD <- as.dist(BD)
+      res <- list(SIM = SIM, BD = BD)
+  }
+  else { 
+        SIM <- matrix(0, n, n)
+        BD <- matrix(0, n, n)
+        rownames(BD) <- rownames(SIM) <- noms            
+        for(i in 2:n) { 
+          for(j in 1:(i-1)) {
+            tmp = mat[i,] - mat[j,]
+            A = sum(pmin(mat[i,], mat[j,])) 
+            B = sum(tmp[tmp>0])             
+      			C = -sum(tmp[tmp<0])            
+      			#
+      			den <- (2*A+B+C)
+            SIM[i,j] <- 1-((B+C)/den)
+            #
+      			BB = sum(mat[i,which(mat[j,]==0)])
+      			CC = sum(mat[j,which(mat[i,]==0)])
+            #
+            min.bc <- pmin(BB, CC)
+            max.bc <- pmax(BB, CC)
+            BD[i,j] <- min.bc / max.bc
+           }
+         }
+        SIM <- as.dist(SIM)
+        BD <- as.dist(BD)
+        res <- list(SIM = SIM, BD = BD)
+  }
+}
+```
+
+### Computation of the scores
+
+```{r Computation of the scores}
+## Preparation of the df
+abund <- splist2presabs(data, 
+                        sites.col = "SUFFIX", 
+                        sp.col = "COMBINED_TYPE", 
+                        keep.n = TRUE)
+abund <- column_to_rownames(abund, var = "SUFFIX")
+
+## 1 - Sorensen similarity
+sor = SIM_FUN(abund, quant = F) 
+sor_sim_dis <- sor$SIM
+sor_sim <- as.matrix(sor_sim_dis)
+sor_sim <- melt(sor_sim)[melt(upper.tri(sor_sim))$value,]
+sor_sim <- sor_sim %>% rename(sor_sim = value)
+
+## 1 - Balanced richness
+sor = SIM_FUN(abund, quant = F) 
+bal_rich_dis <- sor$BD
+bal_rich <- as.matrix(bal_rich_dis)
+bal_rich <- melt(bal_rich)[melt(upper.tri(bal_rich))$value,]
+bal_rich <- bal_rich %>% rename(bal_rich = value)
+
+## 2 - Percentage similarity
+ps = SIM_FUN(abund, quant=T)
+ps_sim_dis <- ps$SIM
+ps_sim <- as.matrix(ps_sim_dis)
+ps_sim <- melt(ps_sim)[melt(upper.tri(ps_sim))$value,]
+ps_sim <- ps_sim %>% rename(ps_sim = value)
+
+## 2 - Balanced abundance
+ps = SIM_FUN(abund, quant=T)
+bal_abund_dis <- ps$BD
+bal_abund <- as.matrix(bal_abund_dis)
+bal_abund <- melt(bal_abund)[melt(upper.tri(bal_abund))$value,]
+bal_abund <- bal_abund %>% rename(bal_abund = value)
+
+## Combine the results
+full_res <- Reduce(function(x,y) merge(x,y,by=c("Var1", "Var2"), all=TRUE), 
+              list(sor_sim, bal_rich, ps_sim, bal_abund))
+full_res$Var1 <- paste("-", full_res$Var1, sep="")
+full_res$Var2 <- paste("-", full_res$Var2, sep="")
+full_res$pair <- paste(full_res$Var1, full_res$Var2, sep = "/")
+full_res <- full_res %>% select(-Var1, -Var2)
+full_res <- full_res[, c(5, 1, 2, 3, 4)] 
+```
+
+
+### Mantel tests
+
+```{r Mantel tests}
+## Correlation between Sørensen and Percentage similarity
+mantel.test(sor_sim_dis, 
+            ps_sim_dis, 
+            method="spearman")
+
+## Correlation between Balanced richness and Balanced abundance
+mantel.test(bal_rich_dis, 
+            bal_abund_dis, 
+            method="spearman")
+```
+
+
+# Figures
+
+
+```{r Figure 3. Frequency of functions per suffix}
+## Preparation of the df
+abund <- splist2presabs(data, 
+                        sites.col = "SUFFIX", 
+                        sp.col = "COMBINED_TYPE", 
+                        keep.n = TRUE)
+abund$SUFFIX <- sub("^", "-", abund$SUFFIX)
+abund <- column_to_rownames(abund, var = "SUFFIX")
+colnames(abund) = gsub("anm", "Animate", colnames(abund))
+colnames(abund) = gsub("art", "Artefact", colnames(abund))
+colnames(abund) = gsub("cog", "Cognitive", colnames(abund))
+colnames(abund) = gsub("dis", "Disease", colnames(abund))
+colnames(abund) = gsub("dom", "Domain", colnames(abund))
+colnames(abund) = gsub("evt", "Event", colnames(abund))
+colnames(abund) = gsub("nat", "Natural", colnames(abund))
+colnames(abund) = gsub("ppt", "Property", colnames(abund))
+colnames(abund) = gsub("sta", "State", colnames(abund))
+colnames(abund) = gsub("fin", "Financial", colnames(abund))
+colnames(abund) = gsub("coll", "Collective", colnames(abund))
+colnames(abund) = gsub("_", "-", colnames(abund))
+colnames(abund) = gsub("-agt", "-AGENT", colnames(abund))
+colnames(abund) = gsub("-ben", "-BENEFICIARY", colnames(abund))
+colnames(abund) = gsub("-cau", "-CAUSE", colnames(abund))
+colnames(abund) = gsub("-des", "-DESTINATION", colnames(abund))
+colnames(abund) = gsub("-ins", "-INSTRUMENT", colnames(abund))
+colnames(abund) = gsub("-loc", "-LOCATION", colnames(abund))
+colnames(abund) = gsub("-pat", "-PATIENT", colnames(abund))
+colnames(abund) = gsub("-pvt", "-PIVOT", colnames(abund))
+colnames(abund) = gsub("-thm", "-THEME", colnames(abund))
+colnames(abund) = gsub("-tsp", "-TRANSPOSITION", colnames(abund))
+colnames(abund) = gsub("-tpc", "-TOPIC", colnames(abund))
+colnames(abund) = gsub("-res", "-RESULT", colnames(abund))
+colnames(abund) = gsub("-man", "-MANNER", colnames(abund))
+colnames(abund) = gsub("-exp", "-EXPERIENCER", colnames(abund))
+colnames(abund) = gsub("-sti", "-STIMULUS", colnames(abund))
+abund <- t(abund) 
+abund <- abund[, c(1, 5, 6, 2, 3, 4)] 
+
+## Creation of an other df to display numbers
+numbers <- abund
+numbers[numbers == 0 ] <- NA
+numbers[is.na(numbers)] <- ""
+
+## Creation of the color palette (black and white)
+mypal <- c("#FFFFFF","#F0F0F0","#D9D9D9","#BDBDBD","#969696", "#737373")
+
+## Heatmap
+pheatmap(abund,
+         cluster_rows = F,
+         cluster_cols = F,
+         angle_col = 0,
+         display_numbers = numbers,
+         color = colorRampPalette(mypal)(100),
+         border_color = "gray90", #gray84
+         annotation_colors = "black",
+         number_color= "black",
+         fontsize_row = 10, 
+         fontsize_col = 10,
+         fontsize_number = 10,
+         na_col = "white"
+         )
+```
+
+
+```{r Figure 4. Scores for incidence-based measures}
+## Preparation of the df
+plot_sor <- full_res
+plot_sor <- plot_sor[,c("pair","sor_sim","bal_rich")]
+plot_sor <- gather(plot_sor, measure, score, sor_sim:bal_rich, factor_key=TRUE)
+plot_sor$score <- ifelse(plot_sor$measure == "sor_sim", -1*plot_sor$score, plot_sor$score)
+levs <- plot_sor[which(plot_sor$measure == "sor_sim"), ] 
+order <- order(-levs[,"score"]) 
+plot_sor$pair2 <- factor(plot_sor$pair, levels = levs[order, "pair"])
+
+## Plot
+ggplot(plot_sor, 
+       aes(x = pair2, 
+           y = score, 
+           fill = measure)) +
+       geom_bar(data = subset(plot_sor, measure == "sor_sim"), 
+                stat = "identity") +
+       geom_bar(data = subset(plot_sor, measure == "bal_rich"), 
+                stat = "identity") +
+       scale_fill_manual(limits = c("sor_sim", "bal_rich"),
+                         labels = c("Sørensen similarity", "Balanced richness"),
+                         values = c("#000000", "#BDBDBD")) +
+       scale_y_continuous(limits = c(-1, 1),
+                          breaks = c(-1, -0.5, 0, 0.5, 1), 
+                          labels = c("1", "0.5", "0", "0.5", "1"),
+                          expand = c(0.01, 0.01)) +
+       coord_flip() +
+       theme_linedraw() +
+       theme(panel.grid.major = element_blank(),
+             panel.grid.minor = element_blank(),
+             legend.position="top",
+             legend.title = element_blank(),
+             text = element_text(size = 15),
+             axis.title = element_blank())
+```
+
+
+```{r Figure 5. Scores for abundance-based measures}
+## Preparation of the df
+plot_ps <- full_res
+plot_ps <- plot_ps[,c("pair","ps_sim","bal_abund")]
+plot_ps <- gather(plot_ps, measure, score, ps_sim:bal_abund, factor_key=TRUE)
+plot_ps$score <- ifelse(plot_ps$measure == "ps_sim", -1*plot_ps$score, plot_ps$score)
+levs <- plot_ps[which(plot_ps$measure == "ps_sim"), ] 
+order <- order(-levs[,"score"]) 
+plot_ps$pair2 <- factor(plot_ps$pair, levels = levs[order, "pair"])
+
+## Plot
+ggplot(plot_ps, 
+       aes(x = pair2, 
+           y = score, 
+           fill = measure)) +
+       geom_bar(data = subset(plot_ps, measure == "ps_sim"), 
+                stat = "identity") +
+       geom_bar(data = subset(plot_ps, measure == "bal_abund"), 
+                stat = "identity") +
+       scale_fill_manual(limits = c("ps_sim", "bal_abund"),
+                         labels = c("Percentage similarity", "Balanced abundance"),
+                         values = c("#000000", "#BDBDBD")) +
+       scale_y_continuous(limits = c(-1, 1),
+                          breaks=c(-1, -0.5, 0, 0.5, 1), 
+                          labels=c("1", "0.5", "0", "0.5", "1"),
+                          expand = c(0.01, 0.01)) +
+       coord_flip() +
+       theme_linedraw() +
+       theme(panel.grid.major = element_blank(),
+             panel.grid.minor = element_blank(),
+             legend.position="top",
+             legend.title = element_blank(),
+             text = element_text(size = 15),
+             axis.title = element_blank())
+```
+
+```{r Figure 6. Relationship between the Sørensen and Percentage similarity measures}
+## Plot
+plot(full_res$ps_sim ~ full_res$sor_sim, 
+     pch = 16,
+     xlab = "Sørensen similarity",
+     ylab = "Percentage similarity"
+     )
+lines(lowess(full_res$ps_sim ~ full_res$sor_sim))
+```
+
+```{r Figure 7. Ranking of the suffix pairs according to the Sørensen vs. Percentage similarity measures}
+## Preparation of the df
+compare_ranks <- full_res %>% select(pair, sor_sim, ps_sim)
+compare_ranks <- gather(compare_ranks, measure, score, sor_sim:ps_sim, factor_key=TRUE)
+compare_ranks <- compare_ranks %>% mutate(measure_num = case_when(
+                                              measure == "ps_sim" ~ 2,
+                                              measure == "sor_sim" ~ 1))
+compare_ranks <- transform(compare_ranks, 
+                           rank = ave(score, measure, 
+                           FUN = function(x) rank(x, ties.method = "max")))
+
+## Plot
+ggplot(compare_ranks, 
+       aes(x = measure_num, 
+           y = rank, 
+           condition = pair)) +
+       geom_bump(smooth = 12) + 
+       geom_point(size = 2) +
+       geom_text(data = compare_ranks %>% filter(measure_num==max(measure_num)),
+                 aes(label = pair, 
+                     y = rank, 
+                     x = measure_num + 0.06), 
+                 hjust = 0,
+                 size = 4,
+                 color = "black") +
+       expand_limits(x = 2.25) +
+       theme_linedraw() +
+       theme(panel.grid.major = element_blank(),
+             panel.grid.minor = element_blank(),
+             panel.border = element_blank(),
+             axis.text = element_text(size = 12),
+             axis.ticks = element_blank(),
+             axis.title = element_blank(),
+             legend.position = "none",
+             legend.title = element_blank(),
+             plot.margin = margin(0.5,0.5,0.5,1, "cm")) +
+       scale_x_discrete(limits = c("1", "2"),
+                        labels = c("Sørensen similarity", "Percentage similarity"),
+                        expand = c(0.03,0.03)) +
+       scale_y_continuous(breaks = c(1:15), 
+                          labels = c("15", "14", "13", "12", "11",
+                                     "10", "9", "8", "7", "6", 
+                                     "5","4","3", "2", "1"))
+```
+
+```{r Figure 8. Relationship between the Balanced richness and Balanced abundance measures}
+## Plot
+plot(full_res$bal_abund ~ full_res$bal_rich, 
+     pch = 16,
+     xlab = "Balanced richness",
+     ylab = "Balanced abundance"
+     )
+lines(lowess(full_res$bal_abund ~ full_res$bal_rich))
+```
+
+```{r Figure 9. Ranking of the suffix pairs according to the Balanced richness vs. Balanced abundance measures}
+## Preparation of the df
+compare_ranks <- full_res %>% select(pair, bal_rich, bal_abund)
+compare_ranks <- gather(compare_ranks, measure, score, bal_rich:bal_abund, factor_key=TRUE)
+compare_ranks <- compare_ranks %>% mutate(measure_num = case_when(
+                                          measure == "bal_abund" ~ 2,
+                                          measure == "bal_rich" ~ 1))
+compare_ranks <- transform(compare_ranks, 
+                           rank = ave(score, measure, 
+                           FUN = function(x) rank(x, ties.method = "max")))
+
+## Plot
+ggplot(compare_ranks, 
+       aes(x = measure_num, 
+           y = rank, 
+           condition = pair)) +
+       geom_bump(smooth = 12) + 
+       geom_point(size = 2) +
+       geom_text(data = compare_ranks %>% filter(measure_num==max(measure_num)),
+                 aes(label = pair, 
+                     y = rank, 
+                     x = measure_num + 0.06), 
+                 hjust = 0,
+                 size = 4,
+                 color = "black") +
+       expand_limits(x = 2.25) +
+       theme_linedraw() +
+       theme(panel.grid.major = element_blank(),
+             panel.grid.minor = element_blank(),
+             panel.border = element_blank(),
+             axis.text = element_text(size = 12),
+             axis.ticks = element_blank(),
+             axis.title = element_blank(),
+             legend.position = "none",
+             legend.title = element_blank(),
+             plot.margin = margin(0.5,0.5,0.5,1, "cm")) +
+       scale_x_discrete(limits = c("1", "2"),
+                        labels = c("Balanced richness", "Balanced abundance"),
+                        expand = c(0.03,0.03)) +
+       scale_y_continuous(breaks = c(1:15), 
+                          labels = c("15", "14", "13", "12", "11",
+                                     "10", "9", "8", "7", "6", 
+                                     "5","4","3", "2", "1"))
+```
+
