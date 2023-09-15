@@ -4,13 +4,14 @@ This repository contains supplementary material for *Measuring affix rivalry as 
 
 | File  | Description | Comment |
 | :--- | :--- | :--- | 
-| annotation_guide_1.2.pdf | Annotation guide that was used for the semantic analysis of deverbal nouns | Other versions are available at https://github.com/semantics-deverbal-nouns/annotation-guide |
-| data_complete.xlsx | Complete dataset | For Section 4 "Case study: Deverbal nominalizing suffixes in French" <br />  |
 | preprint.pdf | Preprint version of the paper | -  |
-| qualico_poster.pdf | Poster presented at the QUALICO2023 conference (https://wp.unil.ch/qualico2023/) | -  |
+| data_complete.xlsx | Complete dataset | For Section 4 "Case study: Deverbal nominalizing suffixes in French" <br />  |
+| annotation_guide_1.2.pdf | Annotation guide that was used for the semantic analysis of deverbal nouns | Other versions are available at https://github.com/semantics-deverbal-nouns/annotation-guide |
 | script_rivalry.Rmd | Script for statistical analysis and data visualization (R Markdown)| - |
+| qualico_poster.pdf | Poster - QUALICO2023 (https://wp.unil.ch/qualico2023/) | -  |
+| ismo_slides.pdf | Slides - ISMo2023 (https://ismo2023.ovh/?fichier=accueil) | - |
 
-data.xlsx contains the following columns:
+data_complete.xlsx contains the following columns:
 
 | Column | Description |
 | :--- | :--- |
